@@ -1,28 +1,22 @@
 /**
- * Placeholder home page — replace this with the app's real home.
- *
- * This is intentionally unstyled scaffolding, not a design to build on.
- * Design the app's own look (layout, theme tokens, typography) from your
- * product's point of view instead of extending this page.
+ * Where Google/GitHub sign-in lands (src/server/http-routes.ts redirects to /home).
+ * Sends the user back to the page they were on before signing in, or to /rounds.
  */
+import { Navigate } from 'react-router-dom'
+import { RETURN_KEY } from './(protected)/_layout'
 
-import { useAuthProfileReady } from 'deepspace'
-import { APP_NAME } from '../../constants'
+function returnPath(): string {
+  try {
+    const path = sessionStorage.getItem(RETURN_KEY)
+    sessionStorage.removeItem(RETURN_KEY)
+    // Only same-site paths: "/r/abc" yes, "//evil.com" no.
+    if (path && path.startsWith('/') && !path.startsWith('//')) return path
+  } catch {
+    // Storage blocked: fall through.
+  }
+  return '/rounds'
+}
 
-export default function HomePage() {
-  const { isSignedIn, user } = useAuthProfileReady({ requireUser: true })
-
-  return (
-    <div className="flex min-h-full flex-col items-center justify-center gap-3 bg-background px-6 text-center text-foreground">
-      <h1 className="text-2xl font-semibold">{APP_NAME}</h1>
-      <p className="max-w-md text-sm text-muted-foreground">
-        This is a placeholder page. Replace <code>src/pages/(app)/home.tsx</code>{' '}
-        with the app&apos;s real home, and give the app its own theme in{' '}
-        <code>src/themes.css</code>.
-      </p>
-      {isSignedIn && user && (
-        <p className="text-sm text-muted-foreground">Signed in as {user.name ?? user.email}</p>
-      )}
-    </div>
-  )
+export default function Home() {
+  return <Navigate to={returnPath()} replace />
 }

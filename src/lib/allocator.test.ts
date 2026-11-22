@@ -158,6 +158,16 @@ describe('allocate: the sample round (D11)', () => {
     expect(placedCount(allocate(input))).toBe(4)
   })
 
+  it('with SAMPLE_SEED gives the canvas draft: Cara and Gus unplaced', () => {
+    expect(seededShuffle(input.responses.map((r) => r.studentId), SAMPLE_SEED)).toEqual([
+      'sample-ben', 'sample-ana', 'sample-gus', 'sample-cara', 'sample-eli', 'sample-dan',
+    ])
+    expect(allocate(input)).toEqual({
+      assignments: { 'sample-ana': 'fri', 'sample-ben': 'fri', 'sample-dan': 'mon', 'sample-eli': 'wed1' },
+      unplaced: ['sample-cara', 'sample-gus'],
+    })
+  })
+
   it('+1 seat on Friday places 5; +1 anywhere else changes nothing', () => {
     expect(previewSeat(input, 'fri').placed).toBe(5)
     for (const key of ['mon', 'wed1', 'wed2']) expect(previewSeat(input, key).placed).toBe(4)

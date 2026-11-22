@@ -17,81 +17,67 @@
  * they stay consistent across every preset.
  */
 @theme {
-  /* shadcn core tokens — slate (default): neutral gray on near-black, indigo accent */
-  --color-background: #0a0a0a;
-  --color-foreground: #e8eaed;
-  --color-card: #161616;
-  --color-card-foreground: #e8eaed;
-  --color-popover: #161616;
-  --color-popover-foreground: #e8eaed;
-  --color-primary: #818cf8;
-  --color-primary-foreground: #ffffff;
-  --color-secondary: #1e1e1e;
-  --color-secondary-foreground: #e8eaed;
-  --color-muted: #1e1e1e;
-  --color-muted-foreground: #9ca3af;
-  --color-accent: #262626;
-  --color-accent-foreground: #e8eaed;
-  --color-destructive: #ef4444;
-  --color-destructive-foreground: #ffffff;
-  --color-border: rgba(60, 64, 67, 0.6);
-  --color-input: rgba(60, 64, 67, 0.6);
-  --color-ring: #818cf8;
-  --radius: 0.5rem;
-
   /*
-   * Map the rounded-* utilities onto --radius so a theme (or you) can change
-   * the app's shape language in one place. At the default 0.5rem these equal
-   * Tailwind's stock values, so there is no visual change until a theme
-   * overrides --radius.
+   * SlotDraft tokens (CLAUDE.md §6, decision D20). Light only: dark mode is out
+   * of scope. Components use these through Tailwind classes (bg-primary,
+   * text-success, border-border...), never a hard-coded hex.
    */
+  --color-background: #ffffff;
+  --color-foreground: #14213d; /* navy: text, header band, 3px section rules */
+  --color-card: #ffffff;
+  --color-card-foreground: #14213d;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #14213d;
+  --color-primary: #2340a8; /* ink blue: brand, primary actions, links, rank numbers, date tabs */
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #eef1f8;
+  --color-secondary-foreground: #14213d;
+  --color-muted: #f4f6fa;
+  --color-muted-foreground: #3a4864; /* secondary text */
+  --color-subtle: #55627a; /* tertiary text */
+  --color-accent: #eef1f8;
+  --color-accent-foreground: #14213d;
+  --color-destructive: #b42318;
+  --color-destructive-foreground: #ffffff;
+  --color-destructive-tint: #fdecea;
+  --color-border: #d5dcea; /* rules */
+  --color-input: #c5cedf; /* input borders */
+  --color-ring: #2340a8;
+  --radius: 0.5rem; /* controls 8px; seats use rounded (4px), date tabs rounded-md (6px) */
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --radius-2xl: calc(var(--radius) + 8px);
 
-  /* Status colors — constant across all themes */
-  --color-success: #10b981;
+  /* Green means one thing: a good outcome (placed, Yes, Submit, Publish). */
+  --color-success: #18794e;
   --color-success-foreground: #ffffff;
-  --color-warning: #f59e0b;
+  --color-success-tint: #e3f4ea;
+  --color-success-light: #c8ebd6;
+  /* Amber: needs attention, warnings. */
+  --color-attention: #8a5300;
+  --color-attention-tint: #fdf1d8;
+  /* Violet: the capacity preview ("what if"). */
+  --color-preview: #6b3fb8;
+  --color-preview-tint: #f1ebfb;
+  /* Muted text on the navy band. */
+  --color-band-muted: #c9d3e8;
+  --color-band-subtle: #8fa3c8;
+  /* Kept for scaffold components that reference them. */
+  --color-warning: #8a5300;
   --color-warning-foreground: #ffffff;
-  --color-info: #3b82f6;
+  --color-info: #2340a8;
   --color-info-foreground: #ffffff;
 
-  /*
-   * Shadows — slate (default). Each theme in themes.css tunes these.
-   *
-   * Toned down 2026-05: previous values were 8px/12px offset with
-   * 32px/40px blur which read as a heavy halo under every Card on
-   * the page. New values are Linear/Stripe-style: barely-there at
-   * rest, slightly more present on hover.
-   *
-   * IMPORTANT: starter components (`Card`, `Dialog`, `CardGrid`,
-   * `Navigation`, `Toast`) intentionally use literal shadow values
-   * via `shadow-[…]` arbitrary-value classes, NOT the
-   * `shadow-card` / `shadow-card-hover` token classes Tailwind v4
-   * generates from this @theme block. Why: Tailwind's @theme directive
-   * compiles these tokens into the utility-class definitions at build
-   * time, and runtime [data-theme] overrides don't always cancel the
-   * baked baseline cleanly — apps switching themes were getting the
-   * slate value carried forward on the compiled `shadow-card` class.
-   * Sidestepping the token system in starter components is the
-   * deterministic fix. See docs/platform/theming-shadows.md.
-   */
-  --shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.12);
-  --shadow-card-hover: 0 2px 8px 0 rgba(0, 0, 0, 0.16);
+  /* No shadows anywhere (§6): drop Tailwind's shadow scale. */
+  --shadow-*: initial;
+  --color-shell: #ffffff;
+  --color-shell-panel: #ffffff;
 
-  /* Shell tokens: the area behind a multi-panel layout, and the raised
-     surface a page renders into. Used by templates whose (app)/_layout is a
-     shell (e.g. copilot's sidebar | panel | chat); a single-column layout
-     simply doesn't reference them. In every theme keep the panel reading as
-     elevated: dark → panel lighter than shell; light → white panel on a
-     faintly darker shell. */
-  --color-shell: #0a0a0a;
-  --color-shell-panel: #161616;
+  --font-sans: 'Overpass', system-ui, sans-serif;
 
-  /* Animations */
   --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
 }
 
@@ -152,9 +138,7 @@
  */
 @layer base {
   html {
-    /* Default to dark for native form controls (calendar icons, scrollbars).
-     * Light themes opt into `color-scheme: light` in themes.css. */
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   html, body, #root {
@@ -164,11 +148,11 @@
   }
 
   body {
-    font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-sans);
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-size: 14px;
+    font-size: 16px;
     color: var(--color-foreground);
   }
 
@@ -226,6 +210,23 @@
    *
    * — never `*`.
    */
+
+  /* Visible keyboard focus (§6 accessibility), scoped to interactive elements. */
+  a:focus-visible,
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  /* Times line up like a timetable board. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
 
   /* Prevent 300ms tap delay on mobile */
   a, button, [role="button"], input, select, textarea {

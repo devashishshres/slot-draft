@@ -5,8 +5,8 @@ import { captureConsoleErrors } from './helpers/errors'
  * Smoke tests covering both page kinds this template ships:
  *   - '/'      → the static landing (top level of src/pages/): no providers,
  *                so no auth fetch and no records WebSocket on load.
- *   - '/home'  → a dynamic page (under src/pages/(app)/): the providers mount,
- *                the nav shell renders, and the records WebSocket connects.
+ *   - '/rounds' → a dynamic, sign-in-gated page (under src/pages/(app)/(protected)/):
+ *                the providers mount, the nav shell renders, and the records WebSocket connects.
  *
  * The "static contract" test is the guardrail for the per-page opt-out: if
  * someone moves the providers back up into _app.tsx, it fails.
@@ -52,20 +52,23 @@ test.describe('Smoke tests', () => {
     expect(offenders).toEqual([])
   })
 
-  test('dynamic app boundary mounts on /home', async ({ page }) => {
-    await page.goto('/home')
+  test('dynamic app boundary mounts on /rounds', async ({ page }) => {
+    await page.goto('/rounds')
     await expect(page.getByTestId('app-navigation')).toBeVisible({ timeout: 15000 })
   })
 
-  test('sign-in button visible when logged out', async ({ page }) => {
-    await page.goto('/home')
+  test('signed out: the rounds page and a student link ask to sign in', async ({ page }) => {
+    await page.goto('/rounds')
     await expect(page.getByTestId('nav-sign-in-button')).toBeVisible({ timeout: 15000 })
+    await expect(page.getByRole('heading', { name: 'Sign in to SlotDraft' })).toBeVisible()
     await expect(page.getByTestId('nav-user-name')).toHaveCount(0)
+    await page.goto('/r/some-round')
+    await expect(page.getByRole('heading', { name: 'Sign in to answer' })).toBeVisible({ timeout: 15000 })
   })
 
-  test('unknown route shows 404', async ({ page }) => {
+  test('unknown route shows the not-found page', async ({ page }) => {
     await page.goto('/nonexistent-page-xyz')
     await waitForApp(page)
-    await expect(page.locator('text=404')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'This page doesn’t exist' })).toBeVisible()
   })
 })

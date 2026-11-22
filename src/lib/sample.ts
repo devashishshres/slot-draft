@@ -12,11 +12,11 @@ export const SAMPLE_TIMEZONE = 'America/Phoenix'
 
 /**
  * Seed stored on the sample round, so its draft is the same for every reviewer.
- * TODO(Devashish): once allocate() exists, pick the seed whose draft leaves
- * Cara as the unplaced Friday student, to match the canvas. The sample test
- * in allocator.test.ts checks the counts for any seed.
+ * Seed 10 draws Ben, Ana, Gus, Cara, Eli, Dan. Ana, Ben and Cara are
+ * Friday-only and nobody can chain into a full Friday, so the first two drawn
+ * (Ben, Ana) get Friday and Cara is left out, matching the canvas.
  */
-export const SAMPLE_SEED = 1
+export const SAMPLE_SEED = 10
 
 export interface SampleWindow {
   key: string
