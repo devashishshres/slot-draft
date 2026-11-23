@@ -1,7 +1,7 @@
 /**
- * Allocator tests. Every promise in allocator.ts has a test here.
- * Until Devashish writes allocate(), every test that calls it fails with
- * "allocate() not written yet (Q3)". That is the expected red state.
+ * Allocator tests. Every promise in allocator.ts has a test here: hand-picked
+ * cases with a pinned draw order, the sample round's exact draft, and 500
+ * seeded random classes checked against a brute-force oracle.
  */
 import { describe, expect, it } from 'vitest'
 import {

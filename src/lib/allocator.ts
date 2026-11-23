@@ -10,9 +10,9 @@
  *   4. Adding one seat changes the placed count by exactly 0 or 1.
  *   5. A failed chain leaves existing assignments unchanged.
  *
- * Ownership (decision Q3): Devashish writes the bodies of `allocate()` and
- * `tryPlace()`. Claude Code wrote the types, `mulberry32`, `seededShuffle`,
- * `previewSeat` and the tests.
+ * Ownership: Claude Code wrote this whole file and its tests. The bodies of
+ * `allocate()` and `tryPlace()` were first reserved for Devashish (decision
+ * Q3); on Nov 23 he asked Claude Code to write them (decision Q5).
  */
 
 export type WindowId = string
@@ -89,40 +89,100 @@ export function seededShuffle(ids: readonly string[], seed: number): string[] {
   return out
 }
 
-/**
- * Build the draft.
- *
- * The rule, in one breath: sort students by id, shuffle with the seeded PRNG
- * (`seededShuffle(ids, input.seed)`), let each pick their best window that
- * still has room; then, for each unplaced student, look for a chain of moves.
- * Move a student only after you know they have somewhere to go; if the chain
- * reaches an open seat, commit every move; if it dead-ends, nobody moves.
- *
- * TODO(Devashish): write this body and `tryPlace()` (decision Q3).
- * `npm run test:unit` runs allocator.test.ts, which covers every promise above.
- */
-export function allocate(input: AllocInput): AllocResult {
-  void input
-  throw new Error('allocate() not written yet (Q3): Devashish writes this body')
+/** Everything the chain search needs to look at and change while building one draft. */
+interface Draft {
+  /** Seats per window. */
+  capacity: Map<WindowId, number>
+  /** Each student's Yes windows, best first. */
+  available: Map<StudentId, WindowId[]>
+  /** Who sits in each window right now. This is the only thing that changes. */
+  seats: Map<WindowId, StudentId[]>
 }
 
 /**
- * Suggested helper for the chain search. The signature is yours to change.
- * Returns true and commits the moves if `studentId` can be seated, possibly
- * by moving others along a chain. `visited` stops the search from looping
- * through the same window twice in one attempt.
+ * Build the draft.
  *
- * TODO(Devashish): write this body (decision Q3).
+ * The rule, in one breath: sort students by id, shuffle with the seeded PRNG,
+ * let each pick their best window that still has room; then, for each
+ * unplaced student, look for a chain of moves. Move a student only after you
+ * know they have somewhere to go; if the chain reaches an open seat, commit
+ * every move; if it dead-ends, nobody moves.
+ *
+ * Why this places the maximum (promise 2): the chain search is the classic
+ * "augmenting path" step of bipartite matching (Kuhn's algorithm). A draft
+ * that no chain can grow is a maximum matching, and a student for whom no
+ * chain exists now will never get one later in the same run, so one pass over
+ * the unplaced students is enough.
  */
-export function tryPlace(
-  studentId: StudentId,
-  seats: Map<WindowId, StudentId[]>,
-  visited: Set<WindowId>,
-): boolean {
-  void studentId
-  void seats
-  void visited
-  throw new Error('tryPlace() not written yet (Q3): Devashish writes this body')
+export function allocate(input: AllocInput): AllocResult {
+  const draft: Draft = {
+    capacity: new Map(input.windows.map((w) => [w.id, w.capacity])),
+    available: new Map(input.responses.map((r) => [r.studentId, r.available])),
+    seats: new Map(input.windows.map((w) => [w.id, []])),
+  }
+
+  // The draw order depends only on the ids and the seed, never on the order
+  // submissions arrived in (promise 3).
+  const order = seededShuffle([...draft.available.keys()], input.seed)
+
+  // 1. Serial pick: in draw order, each student takes their best window with room.
+  const waiting: StudentId[] = []
+  for (const student of order) {
+    const best = (draft.available.get(student) ?? []).find((w) => hasRoom(draft, w))
+    if (best) draft.seats.get(best)?.push(student)
+    else waiting.push(student)
+  }
+
+  // 2. Chains: each student still waiting (in draw order) gets one search,
+  //    with a fresh `visited` set.
+  for (const student of waiting) tryPlace(student, draft, new Set())
+
+  // 3. Read the result off the seats.
+  const assignments: Record<StudentId, WindowId> = {}
+  for (const [windowId, students] of draft.seats) {
+    for (const student of students) assignments[student] = windowId
+  }
+  const unplaced = order.filter((s) => !(s in assignments)).sort()
+  return { assignments, unplaced }
+}
+
+function hasRoom(draft: Draft, windowId: WindowId): boolean {
+  return (draft.seats.get(windowId)?.length ?? 0) < (draft.capacity.get(windowId) ?? 0)
+}
+
+/**
+ * Try to seat `student`, moving others along a chain if needed.
+ *
+ * For each of the student's windows, best first:
+ *   - a seat is open: sit down. The chain ends here, so it succeeds.
+ *   - it's full: ask each person sitting there, "can YOU move somewhere
+ *     else?" (the same question, one level deeper). If one of them can, they
+ *     have already moved by the time the call returns, so take their seat.
+ *
+ * Seats change only on the way back from a successful search, so a chain that
+ * dead-ends changes nothing (promise 5). `visited` makes each window part of
+ * at most one step of the chain, which stops loops (A to B to A) and keeps it fast.
+ * Returns true if the student was seated.
+ */
+function tryPlace(student: StudentId, draft: Draft, visited: Set<WindowId>): boolean {
+  for (const windowId of draft.available.get(student) ?? []) {
+    const seated = draft.seats.get(windowId)
+    if (!seated || visited.has(windowId)) continue // not in this round, or already in this chain
+    visited.add(windowId)
+
+    if (seated.length < (draft.capacity.get(windowId) ?? 0)) {
+      seated.push(student)
+      return true
+    }
+    for (let i = 0; i < seated.length; i++) {
+      const occupant = seated[i]
+      if (occupant !== undefined && tryPlace(occupant, draft, visited)) {
+        seated[i] = student // the occupant moved on, so `student` takes their seat
+        return true
+      }
+    }
+  }
+  return false
 }
 
 /**
