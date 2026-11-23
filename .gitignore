@@ -41,3 +41,6 @@ playwright/.cache/
 Thumbs.db
 *.log
 npm-debug.log*
+
+# --- Private manual (kept local by request) ---
+docs/MANUAL.md

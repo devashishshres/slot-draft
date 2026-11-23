@@ -93,7 +93,7 @@ export default function RoundsPage() {
                   >
                     <span className="font-semibold text-primary">
                       {r.data.title}
-                      {r.data.sample && <span className="ml-2 font-normal text-subtle">(sample)</span>}
+                      {!!r.data.sample && <span className="ml-2 font-normal text-subtle">(sample)</span>}
                     </span>
                     <span className="text-muted-foreground">{roundStatusText(r.data, now)}</span>
                   </Link>

@@ -45,16 +45,16 @@ test('only the student and their round’s TA can read a submission', async ({ u
   expect(await readAs(ta.page, 'roster', { roundId: round.roundId })).toHaveLength(2)
 })
 
-test('the draft is hidden from students until publish, then each sees only their own (needs the allocator)', async ({ users }) => {
+test('the draft is hidden from students until publish, then each sees only their own result (needs the allocator)', async ({ users }) => {
   test.setTimeout(90_000)
   const [ta, student, otherStudent] = await users(['TA One', 'Student One', 'Student Two'])
   const round = await createRound(ta.page, [student.email, otherStudent.email], 8_000)
   await act(student.page, 'submitResponse', { roundId: round.roundId, available: [round.windowIds[0]], noneWork: false, note: '' })
-  await act(otherStudent.page, 'submitResponse', { roundId: round.roundId, available: [round.windowIds[1]], noneWork: false, note: '' })
+  await act(otherStudent.page, 'submitResponse', { roundId: round.roundId, available: [], noneWork: true, note: 'Thursdays after 3' })
   await ta.page.waitForTimeout(9_000)
 
   const draft = await act(ta.page, 'generateDraft', { roundId: round.roundId })
-  expect(draft).toEqual({ success: true, data: { placed: 2, responded: 2 } })
+  expect(draft).toEqual({ success: true, data: { placed: 1, responded: 2 } })
   expect(await readAs(ta.page, 'assignments', { roundId: round.roundId })).toHaveLength(2)
   expect(await readAs(student.page, 'assignments', { roundId: round.roundId })).toHaveLength(0) // R8
 
@@ -67,6 +67,9 @@ test('the draft is hidden from students until publish, then each sees only their
   await student.page.goto(`/r/${round.roundId}`)
   await expect(student.page.getByText('You’re scheduled')).toBeVisible({ timeout: 15_000 })
   await expect(student.page.getByTestId('scheduled-card')).toContainText('Monday, Dec 7')
+  await otherStudent.page.goto(`/r/${round.roundId}`)
+  await expect(otherStudent.page.getByText('You’re not scheduled yet')).toBeVisible({ timeout: 15_000 })
+  await expect(otherStudent.page.getByTestId('not-scheduled-card')).toContainText('Your TA has your note')
 
   const again = await act(ta.page, 'publish', { roundId: round.roundId })
   expect(again).toEqual({ success: false, error: 'This round is published and can’t change.' })

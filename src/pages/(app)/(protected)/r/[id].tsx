@@ -117,7 +117,9 @@ export default function StudentRoundPage() {
         {late && (
           <div className="mb-6">
             <Notice tone="error" title={`Responses closed at ${formatClock(deadline, timezone)}.`}>
-              Your change wasn’t saved. Your last response is the one your TA has.
+              {submission
+                ? 'Your change wasn’t saved. Your last response is the one your TA has.'
+                : 'Your answer wasn’t saved. Email your TA if you still need a time.'}
             </Notice>
           </div>
         )}
@@ -214,7 +216,8 @@ function ResponseForm(props: {
   const [noes, setNoes] = useState<string[]>(() =>
     existing ? windows.map((w) => w.recordId).filter((id) => !existing.available.includes(id)) : [],
   )
-  const [noneWork, setNoneWork] = useState(existing?.noneWork ?? false)
+  // Boolean columns are stored as numbers (0/1), so coerce before sending them back.
+  const [noneWork, setNoneWork] = useState(!!existing?.noneWork)
   const [note, setNote] = useState(existing?.note ?? '')
   const [warned, setWarned] = useState(false)
   const [showWarning, setShowWarning] = useState(false)
@@ -482,7 +485,7 @@ function Result(props: {
         <p className="text-lg font-extrabold">{heading}</p>
         <p className="mt-1">{body}</p>
       </div>
-      {submission?.data.noneWork && submission.data.note && (
+      {!!submission?.data.noneWork && submission.data.note && (
         <div className="mt-6">
           <Section title="What you told your TA">
             <p className="whitespace-pre-line">{submission.data.note}</p>

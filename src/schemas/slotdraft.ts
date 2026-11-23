@@ -103,6 +103,9 @@ export const assignmentsSchema: CollectionSchema = {
 export const slotdraftSchemas = [roundsSchema, windowsSchema, rosterSchema, submissionsSchema, assignmentsSchema]
 
 // --- Record shapes (the `data` part of each envelope) ---
+// Note: boolean columns are stored as numbers, so records read back carry 0/1.
+// Test them for truthiness (`if (x.noneWork)`, `!!x.sample`), never `=== true`,
+// and never as `{x && <jsx>}`, which would render a stray "0".
 
 export type RoundStatus = 'open' | 'closed' | 'published'
 

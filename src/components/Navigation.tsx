@@ -28,12 +28,12 @@ export default function Navigation() {
             <span data-testid="nav-user-name" className={student ? 'sr-only' : 'max-w-[40vw] truncate text-band-muted'}>
               {user.name || user.email}
             </span>
-            <span data-testid="nav-user-email" className={student ? 'max-w-[55vw] truncate text-band-muted' : 'sr-only'}>
+            <span data-testid="nav-user-email" className={student ? 'min-w-0 truncate text-band-muted' : 'sr-only'}>
               {user.email}
             </span>
             <button
               onClick={() => signOut()}
-              className="min-h-11 rounded-lg px-3 font-semibold text-white hover:bg-white/10"
+              className="min-h-11 shrink-0 whitespace-nowrap rounded-lg px-3 font-semibold text-white hover:bg-white/10"
             >
               Sign out
             </button>
