@@ -141,6 +141,16 @@
     color-scheme: light;
   }
 
+  /* Tailwind v4's reset gives buttons `cursor: default`; restore the pointer on
+     everything clickable. Disabled buttons keep `disabled:cursor-not-allowed`
+     (a utility, so it beats this base rule). */
+  button:not(:disabled),
+  [role="button"],
+  summary,
+  a[href] {
+    cursor: pointer;
+  }
+
   html, body, #root {
     min-height: 100vh;
     background-color: var(--color-background);
