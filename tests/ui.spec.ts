@@ -3,21 +3,14 @@
  * TA screens at 1440px, student screens at 390px.
  *
  * Set SLOTDRAFT_SHOTS=/some/dir to also save a full-page screenshot of each state.
- * The sample-round test needs the allocator (decision Q3).
  */
 import { test, expect, loadAllTestAccounts } from 'deepspace/testing'
-import type { Page } from '@playwright/test'
-import { act, createRound } from './helpers/slotdraft'
+import { act, createRound, shot } from './helpers/slotdraft'
 
 test.skip(loadAllTestAccounts().length < 4, 'Needs the 4 test accounts: TA One, TA Two, Student One, Student Two')
 
 const TA = { width: 1440, height: 900 }
 const PHONE = { width: 390, height: 844 }
-
-async function shot(page: Page, name: string) {
-  const dir = process.env.SLOTDRAFT_SHOTS
-  if (dir) await page.screenshot({ path: `${dir}/${name}.png`, fullPage: true })
-}
 
 test('set up a round in the form, then every student screen before the deadline', async ({ users }) => {
   test.setTimeout(120_000)
@@ -112,7 +105,7 @@ test('closed screen: a late change is refused and the student sees the closed sc
   await shot(student.page, 'st-12-closed-late')
 })
 
-test('screens 4 to 6: the sample round from draft to publish (needs the allocator)', async ({ users }) => {
+test('screens 4 to 6: the sample round from draft to publish', async ({ users }) => {
   test.setTimeout(90_000)
   const [ta] = await users(['TA One'])
   await ta.page.setViewportSize(TA)
@@ -130,6 +123,8 @@ test('screens 4 to 6: the sample round from draft to publish (needs the allocato
   // Screen 5: preview, then apply
   await ta.page.getByRole('button', { name: 'Preview this seat' }).click()
   await expect(ta.page.getByText('Cara Diaz gets placed. Nobody else moves.')).toBeVisible()
+  // The band with Apply / Cancel scrolls into view, even though the button pressed was low on the page.
+  await expect(ta.page.getByRole('button', { name: 'Apply this seat' })).toBeInViewport()
   await expect(ta.page.getByRole('button', { name: 'Publish this draft' })).toBeDisabled()
   await shot(ta.page, 'ta-05-preview')
   await ta.page.getByRole('button', { name: 'Apply this seat' }).click()

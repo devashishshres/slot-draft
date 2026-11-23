@@ -1,12 +1,9 @@
 /**
  * Multi-user end-to-end (CLAUDE.md §8.1): separate accounts in separate
  * browser contexts, via the deepspace/testing `users()` fixture.
- *
- * Tests marked "needs the allocator" call generateDraft, so they stay red
- * until allocate() is written (decision Q3).
  */
 import { test, expect, loadAllTestAccounts } from 'deepspace/testing'
-import { act, createRound, readAs } from './helpers/slotdraft'
+import { act, createRound, readAs, shot } from './helpers/slotdraft'
 
 test.skip(loadAllTestAccounts().length < 4, 'Needs the 4 test accounts: TA One, TA Two, Student One, Student Two')
 
@@ -45,7 +42,7 @@ test('only the student and their round’s TA can read a submission', async ({ u
   expect(await readAs(ta.page, 'roster', { roundId: round.roundId })).toHaveLength(2)
 })
 
-test('the draft is hidden from students until publish, then each sees only their own result (needs the allocator)', async ({ users }) => {
+test('the draft is hidden from students until publish, then each sees only their own result', async ({ users }) => {
   test.setTimeout(90_000)
   const [ta, student, otherStudent] = await users(['TA One', 'Student One', 'Student Two'])
   const round = await createRound(ta.page, [student.email, otherStudent.email], 8_000)
@@ -64,12 +61,16 @@ test('the draft is hidden from students until publish, then each sees only their
   expect(mine).toHaveLength(1)
   expect(mine[0]?.data.windowId).toBe(round.windowIds[0])
 
+  await student.page.setViewportSize({ width: 390, height: 844 })
+  await otherStudent.page.setViewportSize({ width: 390, height: 844 })
   await student.page.goto(`/r/${round.roundId}`)
   await expect(student.page.getByText('You’re scheduled')).toBeVisible({ timeout: 15_000 })
   await expect(student.page.getByTestId('scheduled-card')).toContainText('Monday, Dec 7')
   await otherStudent.page.goto(`/r/${round.roundId}`)
   await expect(otherStudent.page.getByText('You’re not scheduled yet')).toBeVisible({ timeout: 15_000 })
   await expect(otherStudent.page.getByTestId('not-scheduled-card')).toContainText('Your TA has your note')
+  await shot(student.page, 'st-13-scheduled')
+  await shot(otherStudent.page, 'st-14-not-scheduled')
 
   const again = await act(ta.page, 'publish', { roundId: round.roundId })
   expect(again).toEqual({ success: false, error: 'This round is published and can’t change.' })

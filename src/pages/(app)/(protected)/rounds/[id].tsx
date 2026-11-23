@@ -12,7 +12,7 @@
  * 'collaborator' via `organizers`). That is why a new response shows up here
  * without a refresh. Every change goes through `callAction`.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth, useQuery, type RecordData } from 'deepspace'
 import { button, DateTab, HeaderBand, listNames, Notice, SeatStrip, Section } from '@/components/slotdraft'
@@ -258,6 +258,12 @@ function Draft({ round, windows, roster, submissions, assignments }: ViewProps) 
   const [previews, setPreviews] = useState<Record<string, SeatPreview>>({})
   const [previewing, setPreviewing] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const bandRef = useRef<HTMLDivElement>(null)
+
+  // "Preview this seat" sits low on the page; bring the Apply / Cancel band into view.
+  useEffect(() => {
+    if (previewing) bandRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [previewing])
   const [error, setError] = useState('')
 
   const names = new Map(roster.map((r) => [r.data.userId, r.data]))
@@ -344,7 +350,7 @@ function Draft({ round, windows, roster, submissions, assignments }: ViewProps) 
       </HeaderBand>
 
       {preview && previewWindow && (
-        <div className="border-b-2 border-preview bg-preview-tint" role="status">
+        <div ref={bandRef} className="border-b-2 border-preview bg-preview-tint" role="status">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
             <div>
               <p className="text-lg font-extrabold text-preview">

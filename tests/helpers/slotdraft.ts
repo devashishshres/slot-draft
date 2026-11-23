@@ -84,3 +84,9 @@ export async function createRound(ta: Page, emails: string[], closesInMs = 60 * 
     .map((w) => w.recordId)
   return { roundId: res.data.roundId, title, windowIds: ids }
 }
+
+/** Saves a full-page screenshot when SLOTDRAFT_SHOTS=/some/dir is set; does nothing otherwise. */
+export async function shot(page: Page, name: string) {
+  const dir = process.env.SLOTDRAFT_SHOTS
+  if (dir) await page.screenshot({ path: `${dir}/${name}.png`, fullPage: true })
+}

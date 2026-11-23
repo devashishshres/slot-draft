@@ -341,8 +341,10 @@ export const actions: Record<string, ActionHandler<Env>> = {
       if (!round.data.sample && student) {
         const message = resultEmail(round, student, windows.get(a.data.windowId), a.data, size, env.APP_NAME)
         try {
+          // The platform sends every app's mail as "DeepSpace Apps" and ignores `from`
+          // (`npx deepspace integrations info email/send`), so the subject names
+          // SlotDraft and reply_to points at the TA. $0.013 per email, billed to the owner.
           const r = await tools.integration('email/send', {
-            from: `SlotDraft <${env.APP_NAME}@app.space>`,
             to: student.email,
             ...(replyTo ? { reply_to: replyTo } : {}),
             ...message,
@@ -399,7 +401,7 @@ export const actions: Record<string, ActionHandler<Env>> = {
 }
 
 /** Plain-text result email. Same facts as the student's result screen. */
-function resultEmail(
+export function resultEmail(
   round: Rec<Round>,
   student: RosterRow,
   window: TimeWindow | undefined,
@@ -413,7 +415,7 @@ function resultEmail(
     const when = `${dateParts(window.date).weekday}, ${dateParts(window.date).short.split(', ')[1]}, ${timeRange(window.start, window.end).text} ${tzAbbr(timezone, new Date(`${window.date}T12:00:00Z`))}`
     const group = groupSize > 1 ? ` It's a group session with ${groupSize - 1} other student${groupSize > 2 ? 's' : ''}.` : ''
     return {
-      subject: `Your ${title} time: ${dateParts(window.date).short}`,
+      subject: `SlotDraft: your ${title} time is ${dateParts(window.date).short}`,
       text: [
         `Hi ${student.name},`,
         '',
@@ -432,7 +434,7 @@ function resultEmail(
       ? 'You said none of the times work. Your TA has your note and will get in touch about another time.'
       : 'The times you could make filled up. Your TA will get in touch about another time.'
   return {
-    subject: `${title}: you're not scheduled yet`,
+    subject: `SlotDraft: you're not scheduled yet for ${title}`,
     text: [`Hi ${student.name},`, '', `You're not scheduled yet for ${title}.`, why, '', `See it in SlotDraft: ${link}`].join('\n'),
   }
 }

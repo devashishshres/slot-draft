@@ -15,7 +15,12 @@ const PORT = Number(process.env.DEEPSPACE_PORT ?? 5173)
 // Local Network Access checks to top-level `localhost` navigation in an agent
 // container; the explicit loopback address keeps the browser and Vite on the
 // same local origin without relying on hostname classification.
-const BASE_URL = `http://127.0.0.1:${PORT}`
+const LOCAL_URL = `http://127.0.0.1:${PORT}`
+// Set SLOTDRAFT_BASE_URL=https://<name>.app.space to run against the deployed
+// app instead (no local server is started). Use it for the smoke suite only:
+// the other suites create test rounds, which would land in production data.
+const REMOTE_URL = process.env.SLOTDRAFT_BASE_URL
+const BASE_URL = REMOTE_URL ?? LOCAL_URL
 
 export default defineConfig({
   testDir: '.',
@@ -27,7 +32,7 @@ export default defineConfig({
     headless: true,
     launchOptions: chromiumLaunchOptions(),
   },
-  webServer: {
+  webServer: REMOTE_URL ? undefined : {
     // Bind the local test server directly. A bare `--host` asks Vite to
     // enumerate every interface, which fails in restricted containers before
     // the app can start (`uv_interface_addresses`).
@@ -37,7 +42,7 @@ export default defineConfig({
     // answers once workerd behind /api/* has booted, so no test starts
     // against a half-up server. Playwright keeps polling through non-OK
     // responses and fails setup with its own clear error at the timeout.
-    url: `${BASE_URL}/api/auth/ok`,
+    url: `${LOCAL_URL}/api/auth/ok`,
     reuseExistingServer: false,
     timeout: 60_000,
     stdout: 'pipe',
