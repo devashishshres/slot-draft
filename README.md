@@ -1,8 +1,8 @@
 # SlotDraft
 
-Fair appointment scheduling for TAs. Students say which time windows they can make and rank them. After the deadline, SlotDraft places the maximum possible number of students, never in a time they said no to, and answering early gives no advantage. The TA can preview what one more seat would change, then publish. Everyone gets an email.
+Fair appointment scheduling for TAs. Opening a round emails each student their own link. Students say which time windows they can make and rank them. After the deadline, SlotDraft places the maximum possible number of students, never in a time they said no to, and answering early gives no advantage. The TA can preview what one more seat would change, then publish. Everyone gets an email.
 
-Built on the [DeepSpace SDK](https://docs.deep.space): React + Vite frontend, Hono worker, a RecordRoom Durable Object for live data, server actions for every write, and the `email/send` integration for results.
+Built on the [DeepSpace SDK](https://docs.deep.space): React + Vite frontend, Hono worker, a RecordRoom Durable Object for live data, server actions for every write, and the `email/send` integration for invites and results.
 
 ## Run it
 
@@ -29,7 +29,7 @@ The multi-user tests need four test accounts: `TA One`, `TA Two`, `Student One` 
 | Path | What it is |
 |---|---|
 | `src/lib/allocator.ts` | The draft algorithm: pure TypeScript, no DeepSpace imports |
-| `src/actions/index.ts` | Every write: 8 server actions, each checks caller, role, round state, then input |
+| `src/actions/index.ts` | Every write: 11 server actions, each checks caller, role, round state, then input |
 | `src/schemas/slotdraft.ts` | The 5 collections and who may read them |
 | `src/pages/(app)/(protected)/rounds/` | TA screens: rounds list, create round, one round (collecting, draft, preview, published) |
 | `src/pages/(app)/(protected)/r/[id].tsx` | The student link (phone layout) |
