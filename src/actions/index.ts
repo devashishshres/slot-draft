@@ -440,6 +440,44 @@ export const actions: Record<string, ActionHandler<Env>> = {
     return { sent, failed: pending.length - sent }
   }),
 
+  /**
+   * TA: add students to an open round (P10). A student added after the
+   * deadline couldn't answer, so it's refused then. The client sends the new
+   * students' invites right after, with sendInvites.
+   */
+  addStudents: guarded(async ({ userId, params, tools }) => {
+    const round = await organizedRound(tools, userId, params.roundId)
+    if (!isOpen(round.data, new Date())) refuse('Responses are closed, so the roster can’t change.')
+    const current = await getAll<RosterRow>(tools, 'roster', { roundId: round.recordId })
+    const roster = parseRoster(
+      typeof params.roster === 'string' ? params.roster : '',
+      current.map((r) => r.data.email),
+    )
+    if (roster.problems.length) refuse(roster.problems[0].message)
+    if (roster.valid.length === 0) refuse('Add at least one student email.')
+    if (current.length + roster.valid.length > ROSTER_MAX) refuse(`Keep the roster to ${ROSTER_MAX} students.`)
+    await Promise.all(roster.valid.map((s) => must(tools.create('roster', { ...newRosterRow(round.recordId, s, userId) }))))
+    return { added: roster.valid.length }
+  }),
+
+  /**
+   * TA: take a student off an open round, e.g. a mistyped email or an invite
+   * link someone else claimed (P10). Their answer goes too, so it can't sit in
+   * the draft without a roster row. Re-adding them issues a new invite link.
+   */
+  removeStudent: guarded(async ({ userId, params, tools }) => {
+    const round = await organizedRound(tools, userId, params.roundId)
+    if (!isOpen(round.data, new Date())) refuse('Responses are closed, so the roster can’t change.')
+    const row = await getOne<RosterRow>(tools, 'roster', params.rosterId)
+    if (!row || row.data.roundId !== round.recordId) refuse('That student isn’t on this round’s roster.')
+    if (row!.data.userId) {
+      const answer = await getOne<Submission>(tools, 'submissions', studentRecordId(round.recordId, row!.data.userId))
+      if (answer) await must(tools.remove('submissions', answer.recordId))
+    }
+    await must(tools.remove('roster', row!.recordId))
+    return { removed: true }
+  }),
+
   /** Anyone signed in: the 7-student sample class (P8), owned by the caller, never emailed. */
   loadSampleRound: guarded(async ({ userId, tools }) => {
     const round: Round = {

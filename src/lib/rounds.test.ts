@@ -47,6 +47,12 @@ describe('parseRoster', () => {
   it('falls back to the email name when the leftover text is not a name', () => {
     expect(parseRoster('12345, ana.lee@example.edu').valid[0].name).toBe('Ana Lee')
   })
+
+  it('flags an email that is already on the roster when adding students (case-insensitive)', () => {
+    const r = parseRoster('Ben Cho <ben@example.edu>\nAna@Example.edu', ['ana@example.edu'])
+    expect(r.valid).toEqual([{ name: 'Ben Cho', email: 'ben@example.edu' }])
+    expect(r.problems).toEqual([{ lineNumber: 2, message: 'Line 2, “Ana@Example.edu”, is already on the roster. Remove it.' }])
+  })
 })
 
 describe('nameFromEmail', () => {

@@ -4,7 +4,7 @@
  * DeepSpace has no email sign-up. The first account to use a link owns it.
  */
 import { test, expect, loadAllTestAccounts } from 'deepspace/testing'
-import { act, createRound, readAs } from './helpers/slotdraft'
+import { act, createRound, readAs, shot } from './helpers/slotdraft'
 
 test.skip(loadAllTestAccounts().length < 4, 'Needs the 4 test accounts: TA One, TA Two, Student One, Student Two')
 
@@ -93,4 +93,84 @@ test('only the organizer sends invites, never for the sample round, and only whi
     success: false,
     error: 'Responses are closed, so there’s nothing to invite students to.',
   })
+})
+
+// Roster edits while responses are open (Task 5)
+const ROSTER_CLOSED = 'Responses are closed, so the roster can’t change.'
+
+test('the organizer adds students while responses are open; duplicates and other TAs are refused', async ({ users }) => {
+  const [ta, other, student] = await users(['TA One', 'TA Two', 'Student One'])
+  const { roundId } = await createRound(ta.page, [student.email])
+  expect(await act(other.page, 'addStudents', { roundId, roster: 'eli.park@example.edu' })).toEqual({
+    success: false,
+    error: 'Only the TA who made this round can do that.',
+  })
+  const shouted = student.email.toUpperCase()
+  expect(await act(ta.page, 'addStudents', { roundId, roster: shouted })).toEqual({
+    success: false,
+    error: `Line 1, “${shouted}”, is already on the roster. Remove it.`,
+  })
+  expect(await act(ta.page, 'addStudents', { roundId, roster: ' \n ' })).toEqual({ success: false, error: 'Add at least one student email.' })
+  expect(await act(ta.page, 'addStudents', { roundId, roster: 'Eli Park <eli.park@example.edu>' })).toEqual({ success: true, data: { added: 1 } })
+  const eli = await rosterRow(ta.page, roundId, 'eli.park@example.edu')
+  expect(eli.data).toMatchObject({ name: 'Eli Park', userId: '', inviteStatus: '' })
+  expect(String(eli.data.inviteToken)).toMatch(/^[0-9a-f-]{36}$/)
+})
+
+test('removing a student deletes their answer; only the organizer, only before the deadline', async ({ users }) => {
+  test.setTimeout(60_000)
+  const [ta, other, student] = await users(['TA One', 'TA Two', 'Student One'])
+  const round = await createRound(ta.page, [student.email, 'typo@exmaple.edu'], 15_000)
+  const { roundId } = round
+  expect((await act(student.page, 'submitResponse', { roundId, available: [round.windowIds[0]], noneWork: false, note: '' })).success).toBe(true)
+  const row = await rosterRow(ta.page, roundId, student.email)
+
+  expect(await act(other.page, 'removeStudent', { roundId, rosterId: row.recordId })).toEqual({
+    success: false,
+    error: 'Only the TA who made this round can do that.',
+  })
+  expect(await act(ta.page, 'removeStudent', { roundId, rosterId: 'not-a-row' })).toEqual({
+    success: false,
+    error: 'That student isn’t on this round’s roster.',
+  })
+  expect(await act(ta.page, 'removeStudent', { roundId, rosterId: row.recordId })).toEqual({ success: true, data: { removed: true } })
+  expect((await readAs(ta.page, 'roster', { roundId })).map((r) => r.data.email)).toEqual(['typo@exmaple.edu'])
+  expect(await readAs(ta.page, 'submissions', { roundId })).toEqual([])
+  expect(await act(student.page, 'joinRound', { roundId })).toMatchObject({ success: true, data: { onRoster: false } })
+
+  // Once responses close, the roster is fixed
+  await ta.page.waitForTimeout(15_000)
+  const typo = await rosterRow(ta.page, roundId, 'typo@exmaple.edu')
+  expect(await act(ta.page, 'removeStudent', { roundId, rosterId: typo.recordId })).toEqual({ success: false, error: ROSTER_CLOSED })
+  expect(await act(ta.page, 'addStudents', { roundId, roster: 'late@example.edu' })).toEqual({ success: false, error: ROSTER_CLOSED })
+})
+
+test('on the collecting screen the TA adds a student (emailed at once) and removes one', async ({ users }) => {
+  test.setTimeout(90_000)
+  const [ta, student] = await users(['TA One', 'Student One'])
+  await ta.page.setViewportSize({ width: 1440, height: 900 })
+  const { roundId } = await createRound(ta.page, [student.email])
+  await ta.page.goto(`/rounds/${roundId}`)
+  await expect(ta.page.getByText('1 student hasn’t been emailed yet.')).toBeVisible({ timeout: 15_000 })
+
+  await ta.page.getByRole('button', { name: 'Add students' }).click()
+  const box = ta.page.getByLabel('Add students')
+  await box.fill(student.email)
+  await expect(ta.page.getByText(`Line 1, “${student.email}”, is already on the roster. Remove it.`)).toBeVisible()
+  await expect(ta.page.getByRole('button', { name: 'Add and email invites' })).toBeDisabled()
+  await box.fill('Eli Park <eli.park@deepspace.test>')
+  await expect(ta.page.getByText('1 new student')).toBeVisible()
+  await expect(ta.page.getByRole('button', { name: 'Add and email invites' })).toBeEnabled()
+  await shot(ta.page, 'ta-03b-add-students')
+  await ta.page.getByRole('button', { name: 'Add and email invites' }).click()
+
+  // The new row appears live, and adding also sends the invites nobody got yet
+  await expect(ta.page.getByText('eli.park@deepspace.test')).toBeVisible({ timeout: 15_000 })
+  await expect(ta.page.getByText('Invites emailed to all 2 students.')).toBeVisible({ timeout: 30_000 })
+  await expect(ta.page.getByTestId('responded-count')).toHaveText('0 of 2 responded')
+
+  ta.page.once('dialog', (d) => void d.accept())
+  await ta.page.getByRole('button', { name: 'Remove Eli Park' }).click()
+  await expect(ta.page.getByText('eli.park@deepspace.test')).toHaveCount(0, { timeout: 15_000 })
+  await expect(ta.page.getByTestId('responded-count')).toHaveText('0 of 1 responded')
 })

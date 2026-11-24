@@ -18,7 +18,7 @@ import { useAuth, useQuery, type RecordData } from 'deepspace'
 import { button, DateTab, HeaderBand, listNames, Notice, SeatStrip, Section } from '@/components/slotdraft'
 import type { SeatPreview } from '@/lib/allocator'
 import { callAction } from '@/lib/api'
-import { isOpen } from '@/lib/rounds'
+import { isOpen, parseRoster } from '@/lib/rounds'
 import { dateParts, formatShortWhen, formatWhen, timeRange, tzAbbr } from '@/lib/time'
 import type { Assignment, Round, RosterRow, Submission, TimeWindow } from '@/schemas/slotdraft'
 
@@ -118,6 +118,7 @@ function Collecting({ round, windows, roster, submissions, open }: ViewProps & {
   const [error, setError] = useState('')
   const [sending, setSending] = useState(false)
   const [inviteError, setInviteError] = useState('')
+  const [rosterError, setRosterError] = useState('')
   const location = useLocation()
   const navigate = useNavigate()
   const autoSent = useRef(false)
@@ -138,6 +139,17 @@ function Collecting({ round, windows, roster, submissions, open }: ViewProps & {
       setInviteError((e as Error).message)
     } finally {
       setSending(false)
+    }
+  }
+
+  /** Takes a student off the roster, with their answer, after a confirm (P10). */
+  async function remove(r: Rec<RosterRow>, answered: boolean) {
+    if (!window.confirm(`Remove ${r.data.name}?${answered ? ' Their answer will be deleted too.' : ''}`)) return
+    setRosterError('')
+    try {
+      await callAction('removeStudent', { roundId: round.recordId, rosterId: r.recordId })
+    } catch (e) {
+      setRosterError((e as Error).message)
     }
   }
 
@@ -255,13 +267,20 @@ function Collecting({ round, windows, roster, submissions, open }: ViewProps & {
                       <td className="tabular py-3 pr-3">{sub && !noneWork ? `${sub.data.available.length} of ${windows.length}` : ''}</td>
                       <td className="tabular py-3 pr-3 text-muted-foreground">{sub ? formatShortWhen(sub.updatedAt, timezone) : ''}</td>
                       <td className="py-3">
-                        {/* The body carries their personal link, so the TA can send it by hand if the invite didn't arrive. */}
-                        <a
-                          className="font-semibold text-primary underline"
-                          href={`${mailto(r.data.email, title)}&body=${encodeURIComponent(`Pick the times you can make for ${title}: ${inviteLink(r)}`)}`}
-                        >
-                          Email<span className="sr-only"> {r.data.name}</span>
-                        </a>
+                        <div className="flex justify-end gap-4">
+                          {/* The body carries their personal link, so the TA can send it by hand if the invite didn't arrive. */}
+                          <a
+                            className="font-semibold text-primary underline"
+                            href={`${mailto(r.data.email, title)}&body=${encodeURIComponent(`Pick the times you can make for ${title}: ${inviteLink(r)}`)}`}
+                          >
+                            Email<span className="sr-only"> {r.data.name}</span>
+                          </a>
+                          {open && !sample && (
+                            <button className="font-semibold text-destructive underline" onClick={() => void remove(r, !!sub)}>
+                              Remove<span className="sr-only"> {r.data.name}</span>
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )
@@ -269,6 +288,14 @@ function Collecting({ round, windows, roster, submissions, open }: ViewProps & {
               </tbody>
             </table>
           </div>
+          {rosterError && (
+            <div className="mt-4">
+              <Notice tone="error" title={rosterError} />
+            </div>
+          )}
+          {open && !sample && (
+            <AddStudents roundId={round.recordId} existing={roster.map((r) => r.data.email)} onAdded={() => void sendInvites()} />
+          )}
         </Section>
 
         <div className="flex flex-wrap items-center justify-between gap-4 border-t-[3px] border-foreground pt-4">
@@ -296,6 +323,82 @@ function Note({ text }: { text: string }) {
           {full ? 'Show less' : 'Show full note'}
         </button>
       )}
+    </div>
+  )
+}
+
+/**
+ * Adding students to an open round (P10): same live check as the create form,
+ * plus "already on the roster". New students are emailed straight away.
+ */
+function AddStudents({ roundId, existing, onAdded }: { roundId: string; existing: string[]; onAdded: () => void }) {
+  const [adding, setAdding] = useState(false)
+  const [text, setText] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const parsed = useMemo(() => parseRoster(text, existing), [text, existing])
+  const count = parsed.valid.length
+
+  if (!adding) {
+    return (
+      <button className={`${button.outline} mt-6`} onClick={() => setAdding(true)}>
+        Add students
+      </button>
+    )
+  }
+
+  async function add() {
+    setSaving(true)
+    setError('')
+    try {
+      await callAction('addStudents', { roundId, roster: text })
+      setText('')
+      setAdding(false)
+      onAdded()
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="mt-6 max-w-xl">
+      <label htmlFor="add-students" className="block text-lg font-extrabold">
+        Add students
+      </label>
+      <p className="mb-2 text-muted-foreground">One email per line. Each new student gets their invite right away.</p>
+      <textarea
+        id="add-students"
+        rows={4}
+        className="w-full rounded-lg border border-input p-3 text-base"
+        placeholder="Eli Park <eli.park@example.edu>"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+      />
+      <p className="mt-2 font-semibold" aria-live="polite">
+        {count} new {count === 1 ? 'student' : 'students'}
+      </p>
+      {parsed.problems.length > 0 && (
+        <ul className="mt-2 space-y-1 text-destructive" role="alert">
+          {parsed.problems.map((p) => (
+            <li key={p.lineNumber}>{p.message}</li>
+          ))}
+        </ul>
+      )}
+      {error && (
+        <div className="mt-3">
+          <Notice tone="error" title={error} />
+        </div>
+      )}
+      <div className="mt-4 flex flex-wrap gap-3">
+        <button className={button.primary} disabled={saving || count === 0 || parsed.problems.length > 0} onClick={() => void add()}>
+          {saving ? 'Adding…' : 'Add and email invites'}
+        </button>
+        <button className={button.outline} disabled={saving} onClick={() => setAdding(false)}>
+          Cancel
+        </button>
+      </div>
     </div>
   )
 }

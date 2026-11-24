@@ -11,7 +11,8 @@ export const NOTE_MAX = 500
 export const TITLE_MAX = 120
 export const SEATS_MAX = 100
 export const WINDOWS_MAX = 100
-export const ROSTER_MAX = 1000
+// Each student gets an invite email the app owner pays for, so rosters stay class-sized (R20).
+export const ROSTER_MAX = 300
 
 export interface RosterEntry {
   name: string
@@ -41,9 +42,10 @@ export function nameFromEmail(email: string): string {
  * One student per line: an email, optionally with a name ("Ana Lee <ana@x.edu>",
  * "Ana Lee, ana@x.edu"). Emails are lowercased so roster matching on sign-in is
  * case-insensitive. Blank lines are ignored; line numbers in errors are the
- * real ones, so the TA can find the line.
+ * real ones, so the TA can find the line. `existing` holds the emails already
+ * on the roster, for adding students to an open round.
  */
-export function parseRoster(text: string): { valid: RosterEntry[]; problems: RosterProblem[] } {
+export function parseRoster(text: string, existing: string[] = []): { valid: RosterEntry[]; problems: RosterProblem[] } {
   const valid: RosterEntry[] = []
   const problems: RosterProblem[] = []
   const firstLineOf = new Map<string, number>()
@@ -65,6 +67,10 @@ export function parseRoster(text: string): { valid: RosterEntry[]; problems: Ros
     }
 
     const email = token.toLowerCase()
+    if (existing.includes(email)) {
+      problems.push({ lineNumber, message: `Line ${lineNumber}, “${token}”, is already on the roster. Remove it.` })
+      return
+    }
     const seenOn = firstLineOf.get(email)
     if (seenOn) {
       problems.push({ lineNumber, message: `Line ${lineNumber}, “${token}”, is already on line ${seenOn}. Remove one of them.` })
