@@ -48,7 +48,13 @@ export default function Navigation() {
           </button>
         ) : null}
       </div>
-      {showAuthModal && <AuthOverlay onClose={() => setShowAuthModal(false)} />}
+      {showAuthModal && (
+        <AuthOverlay
+          title="Sign in to SlotDraft"
+          description="No password needed. Use your Google or GitHub account."
+          onClose={() => setShowAuthModal(false)}
+        />
+      )}
     </header>
   )
 }

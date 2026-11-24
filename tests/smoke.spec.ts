@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { captureConsoleErrors } from './helpers/errors'
+import { shot } from './helpers/slotdraft'
 
 /**
  * Smoke tests covering both page kinds this template ships:
@@ -64,6 +65,24 @@ test.describe('Smoke tests', () => {
     await expect(page.getByTestId('nav-user-name')).toHaveCount(0)
     await page.goto('/r/some-round')
     await expect(page.getByRole('heading', { name: 'Sign in to answer' })).toBeVisible({ timeout: 15000 })
+    await expect(page.getByText('Use the Google or GitHub account with the email your TA has for you.')).toBeVisible()
+    await page.goto('/r/some-round?invite=abc')
+    await expect(page.getByText('No password needed. Any Google or GitHub account works with your invite link.')).toBeVisible({ timeout: 15000 })
+  })
+
+  // Real users can't create an email account on DeepSpace (public email sign-up
+  // is closed), so the card offers only Google and GitHub (decision D28).
+  test('the sign-in card offers Google and GitHub, and no email option', async ({ page }) => {
+    await page.goto('/rounds')
+    await page.getByTestId('nav-sign-in-button').click()
+    const card = page.getByTestId('auth-overlay')
+    await expect(card.getByRole('heading', { name: 'Sign in to SlotDraft' })).toBeVisible({ timeout: 15000 })
+    await expect(card.getByRole('button', { name: 'Continue with Google' })).toBeVisible()
+    await expect(card.getByRole('button', { name: 'Continue with GitHub' })).toBeVisible()
+    await expect(card.getByText('Sign in with email')).toBeHidden()
+    await expect(card.getByText('or', { exact: true })).toBeHidden()
+    if (process.env.SLOTDRAFT_SHOTS) await page.waitForTimeout(800) // let the card fade in
+    await shot(page, 'sign-in-card')
   })
 
   test('unknown route shows the not-found page', async ({ page }) => {

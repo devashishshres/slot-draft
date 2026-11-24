@@ -24,31 +24,34 @@ export default function ProtectedLayout() {
 
 function SignedOutPanel() {
   const [showAuthModal, setShowAuthModal] = useState(false)
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   const student = pathname.startsWith('/r/')
+  // A personal invite link (?invite=…) works with any account (R19). The shared
+  // link only matches the email on the roster.
+  const invited = student && new URLSearchParams(search).has('invite')
+  const hint = invited
+    ? 'No password needed. Any Google or GitHub account works with your invite link.'
+    : student
+      ? 'Use the Google or GitHub account with the email your TA has for you.'
+      : 'No password needed. Use your Google or GitHub account.'
 
   useEffect(() => {
     try {
-      sessionStorage.setItem(RETURN_KEY, pathname)
+      // The query string too, so ?invite= survives the trip to Google and back.
+      sessionStorage.setItem(RETURN_KEY, pathname + search)
     } catch {
       // Storage blocked: the user lands on /rounds after sign-in instead.
     }
-  }, [pathname])
+  }, [pathname, search])
 
   return (
     <div className="mx-auto max-w-md px-4 py-16">
       <h1 className="text-[28px] font-extrabold">{student ? 'Sign in to answer' : 'Sign in to SlotDraft'}</h1>
-      <p className="mt-2 text-muted-foreground">
-        {student
-          ? 'Use the Google or GitHub account with the email your TA has for you.'
-          : 'Use your Google or GitHub account.'}
-      </p>
+      <p className="mt-2 text-muted-foreground">{hint}</p>
       <button className={`${button.primary} mt-6 w-full`} onClick={() => setShowAuthModal(true)}>
         Sign in
       </button>
-      {showAuthModal && (
-        <AuthOverlay title="Sign in to SlotDraft" description="" onClose={() => setShowAuthModal(false)} />
-      )}
+      {showAuthModal && <AuthOverlay title="Sign in to SlotDraft" description={hint} onClose={() => setShowAuthModal(false)} />}
     </div>
   )
 }

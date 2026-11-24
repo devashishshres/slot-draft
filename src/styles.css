@@ -243,3 +243,14 @@
     touch-action: manipulation;
   }
 }
+
+/* ponytail: DeepSpace's <AuthOverlay> always offers "Sign in with email", but
+   public email sign-up is closed platform-wide, so for real users it's a dead
+   end (decision D28). Hide it and the "or" divider just before it. Unlayered on
+   purpose: the button's own `flex` utility would beat a rule in @layer base.
+   This leans on the SDK's test ids; if they change, the option reappears and
+   smoke.spec.ts fails. Then build a small card with the two OAuth buttons. */
+[data-testid="auth-overlay"] [data-testid="auth-email-toggle"],
+[data-testid="auth-overlay"] div:has(+ [data-testid="auth-email-toggle"]) {
+  display: none;
+}
