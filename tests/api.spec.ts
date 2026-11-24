@@ -7,7 +7,7 @@ import { test as base, expect } from '@playwright/test'
 import { test, loadAllTestAccounts } from 'deepspace/testing'
 import { act, createRound, recordTool } from './helpers/slotdraft'
 
-const ACTIONS = ['createRound', 'joinRound', 'submitResponse', 'generateDraft', 'previewSeat', 'applySeat', 'publish', 'loadSampleRound']
+const ACTIONS = ['createRound', 'joinRound', 'submitResponse', 'generateDraft', 'previewSeat', 'applySeat', 'publish', 'loadSampleRound', 'sendInvites']
 
 base('every action returns 401 without a token', async ({ request }) => {
   for (const name of ACTIONS) {

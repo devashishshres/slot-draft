@@ -65,3 +65,32 @@ test('opening an invite link in the browser shows the response form and drops th
   await expect(invited.page.getByRole('heading', { name: 'Can you make it?' })).toBeVisible({ timeout: 15_000 })
   await expect(invited.page).toHaveURL(new RegExp(`/r/${roundId}$`))
 })
+
+// Invite emails (Task 4). Test accounts are @deepspace.test, so the sends are
+// real calls to email/send ($0.013 each) that never reach a person.
+test('sendInvites emails each roster student once and records it per row', async ({ users }) => {
+  const [ta, s1, s2] = await users(['TA One', 'Student One', 'Student Two'])
+  const { roundId } = await createRound(ta.page, [s1.email, s2.email])
+  expect(await act(ta.page, 'sendInvites', { roundId })).toEqual({ success: true, data: { sent: 2, failed: 0 } })
+  const rows = await readAs(ta.page, 'roster', { roundId })
+  expect(rows.map((r) => r.data.inviteStatus)).toEqual(['sent', 'sent'])
+  // Nobody is left to email, so a second call sends nothing
+  expect(await act(ta.page, 'sendInvites', { roundId })).toEqual({ success: true, data: { sent: 0, failed: 0 } })
+})
+
+test('only the organizer sends invites, never for the sample round, and only while responses are open', async ({ users }) => {
+  test.setTimeout(60_000)
+  const [ta, other, student] = await users(['TA One', 'TA Two', 'Student One'])
+  const { roundId } = await createRound(ta.page, [student.email], 5_000)
+  expect(await act(other.page, 'sendInvites', { roundId })).toEqual({ success: false, error: 'Only the TA who made this round can do that.' })
+  const sample = await act<{ roundId: string }>(ta.page, 'loadSampleRound', {})
+  expect(await act(ta.page, 'sendInvites', { roundId: sample.data?.roundId })).toEqual({
+    success: false,
+    error: 'The sample round has no real students to email.',
+  })
+  await ta.page.waitForTimeout(6_000)
+  expect(await act(ta.page, 'sendInvites', { roundId })).toEqual({
+    success: false,
+    error: 'Responses are closed, so there’s nothing to invite students to.',
+  })
+})

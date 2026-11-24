@@ -197,6 +197,31 @@ async function rosterRowFor(tools: ActionTools, round: Rec<Round>, email: string
   return row
 }
 
+/**
+ * Sends one email; true if the platform accepted it. Never throws, so one bad
+ * address can't stop a publish or a batch of invites (CLAUDE.md §4).
+ * The platform sends every app's mail as "DeepSpace Apps" and ignores `from`
+ * (`npx deepspace integrations info email/send`), so subjects start with
+ * "SlotDraft:" and reply_to points at the TA. $0.013 per email, billed to the
+ * app owner.
+ */
+async function sendEmail(tools: ActionTools, to: string, replyTo: string, message: { subject: string; text: string }) {
+  try {
+    const r = await tools.integration('email/send', { to, ...(replyTo ? { reply_to: replyTo } : {}), ...message })
+    if (!r.success) console.error(`[email] send failed: ${r.error}`)
+    return r.success
+  } catch (err) {
+    console.error(`[email] send threw: ${err instanceof Error ? err.message : String(err)}`)
+    return false
+  }
+}
+
+/**
+ * Invites can go to any address and the app owner pays for each one, so one
+ * TA can't use SlotDraft to send unlimited mail (R20).
+ */
+const INVITES_PER_DAY = 600
+
 async function organizerEmail(tools: ActionTools, organizerId: string): Promise<string> {
   const user = await getOne<{ email?: string }>(tools, 'users', organizerId)
   return user?.data.email ?? ''
@@ -370,27 +395,49 @@ export const actions: Record<string, ActionHandler<Env>> = {
       let emailStatus: Assignment['emailStatus'] = 'skipped'
       if (!round.data.sample && student) {
         const message = resultEmail(round, student, windows.get(a.data.windowId), a.data, size, env.APP_NAME)
-        try {
-          // The platform sends every app's mail as "DeepSpace Apps" and ignores `from`
-          // (`npx deepspace integrations info email/send`), so the subject names
-          // SlotDraft and reply_to points at the TA. $0.013 per email, billed to the owner.
-          const r = await tools.integration('email/send', {
-            to: student.email,
-            ...(replyTo ? { reply_to: replyTo } : {}),
-            ...message,
-          })
-          emailStatus = r.success ? 'sent' : 'failed'
-          if (!r.success) console.error(`[publish] email to a student failed: ${r.error}`)
-        } catch (err) {
-          emailStatus = 'failed'
-          console.error(`[publish] email threw: ${err instanceof Error ? err.message : String(err)}`)
-        }
+        emailStatus = (await sendEmail(tools, student.email, replyTo, message)) ? 'sent' : 'failed'
       }
       if (emailStatus === 'sent') sent++
       if (emailStatus === 'failed') failed++
       await must(tools.update('assignments', a.recordId, { emailStatus }))
     }
     return { sent, failed }
+  }),
+
+  /**
+   * TA: email each roster student their personal invite link (P9, R19).
+   * Sends to everyone not yet 'sent', so it is also "try again" for failures
+   * and "send the rest" if an earlier batch was cut off. Each row's status is
+   * written as it goes, so the TA's roster table updates live.
+   */
+  sendInvites: guarded(async ({ userId, params, tools, env, callerJwt }) => {
+    const round = await organizedRound(tools, userId, params.roundId)
+    if (round.data.sample) refuse('The sample round has no real students to email.')
+    if (!isOpen(round.data, new Date())) refuse('Responses are closed, so there’s nothing to invite students to.')
+
+    const rows = await getAll<RosterRow>(tools, 'roster', { roundId: round.recordId })
+    const pending = rows.filter((r) => r.data.inviteStatus !== 'sent')
+    const dayAgo = Date.now() - 24 * 60 * 60 * 1000
+    const sentToday = (await getAll<RosterRow>(tools, 'roster', { organizerId: userId })).filter(
+      (r) => r.data.inviteStatus === 'sent' && Date.parse(r.updatedAt) > dayAgo,
+    ).length
+    if (sentToday + pending.length > INVITES_PER_DAY) {
+      refuse(`SlotDraft sends up to ${INVITES_PER_DAY} invites a day for each TA, and this would go over. Try again tomorrow, or share the round link yourself.`)
+    }
+
+    // ponytail: one at a time (about 0.3s each), the same as publish. Two calls
+    // at the same moment could email a student twice; the button is disabled
+    // while sending, so that takes two tabs.
+    const replyTo = callerEmail(callerJwt)
+    let sent = 0
+    for (const row of pending) {
+      // Rows from before invites existed have no token yet.
+      const inviteToken = row.data.inviteToken || crypto.randomUUID()
+      const ok = await sendEmail(tools, row.data.email, replyTo, inviteEmail(round, { ...row.data, inviteToken }, env.APP_NAME))
+      await must(tools.update('roster', row.recordId, { inviteToken, inviteStatus: ok ? 'sent' : 'failed' }))
+      if (ok) sent++
+    }
+    return { sent, failed: pending.length - sent }
   }),
 
   /** Anyone signed in: the 7-student sample class (P8), owned by the caller, never emailed. */
@@ -429,6 +476,26 @@ export const actions: Record<string, ActionHandler<Env>> = {
     }
     return { roundId }
   }),
+}
+
+/** Plain-text invite with the student's personal link (R19). */
+export function inviteEmail(round: Rec<Round>, student: RosterRow, appName: string): { subject: string; text: string } {
+  const { title, timezone, deadline } = round.data
+  const link = `https://${appName}.app.space/r/${round.recordId}?invite=${student.inviteToken}`
+  return {
+    subject: `SlotDraft: pick your times for ${title}`,
+    text: [
+      `Hi ${student.name},`,
+      '',
+      `Your TA is scheduling ${title}. Mark the times you can make by ${formatWhen(deadline, timezone)} ${tzAbbr(timezone, new Date(deadline))}:`,
+      link,
+      '',
+      "Sign in with any Google or GitHub account. No password needed. This link is yours, so don't forward it.",
+      "Answering early doesn't give you priority. You can change your answer until the deadline.",
+      '',
+      'Questions? Reply to this email to reach your TA.',
+    ].join('\n'),
+  }
 }
 
 /** Plain-text result email. Same facts as the student's result screen. */

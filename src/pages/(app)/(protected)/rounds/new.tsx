@@ -51,7 +51,8 @@ export default function NewRoundPage() {
         windows,
         roster: rosterText,
       })
-      navigate(`/rounds/${roundId}`)
+      // The round page sends the invites, so the TA watches each one go out (P9).
+      navigate(`/rounds/${roundId}`, { state: { sendInvites: true } })
     } catch (e) {
       setServerError((e as Error).message)
       setSaving(false)
@@ -204,9 +205,10 @@ export default function NewRoundPage() {
             </Notice>
           )}
           <p className="text-muted-foreground">Windows can’t change once the round opens. You can add seats on the draft.</p>
+          <p className="text-muted-foreground">Each student gets an email with their own link.</p>
           {serverError && <Notice tone="error" title={serverError} />}
           <button className={`${button.primary} w-full`} disabled={!!problem || saving} onClick={submit}>
-            {saving ? 'Opening round…' : 'Open round for responses'}
+            {saving ? 'Opening round…' : 'Open round and email students'}
           </button>
           {problem && <p className="text-muted-foreground">{problem}</p>}
         </aside>

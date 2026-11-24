@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { resultEmail } from './index'
+import { inviteEmail, resultEmail } from './index'
 import type { Assignment, Round, RosterRow } from '../schemas/slotdraft'
 
 const round = {
   recordId: 'r1',
-  data: { title: 'CSE 360 project demos', timezone: 'America/Phoenix' } as Round,
+  data: { title: 'CSE 360 project demos', timezone: 'America/Phoenix', deadline: '2026-11-23T06:59:00.000Z' } as Round,
   createdAt: '',
   updatedAt: '',
   createdBy: '',
@@ -33,5 +33,17 @@ describe('resultEmail', () => {
     expect(none.text).toContain('Your TA has your note')
     const full = resultEmail(round, student, undefined, assignment({ reason: 'full' }), 0, 'slotdraft')
     expect(full.text).toContain('The times you could make filled up.')
+  })
+})
+
+describe('inviteEmail', () => {
+  it('gives the student their personal link, the deadline with its zone, and how to sign in', () => {
+    const m = inviteEmail(round, student, 'slotdraft')
+    expect(m.subject).toBe('SlotDraft: pick your times for CSE 360 project demos')
+    expect(m.text).toContain('Hi Ana Lee,')
+    expect(m.text).toContain('Mark the times you can make by Sun, Nov 22 at 11:59 PM MST:')
+    expect(m.text).toContain('https://slotdraft.app.space/r/r1?invite=tok-123')
+    expect(m.text).toContain('Sign in with any Google or GitHub account. No password needed.')
+    expect(m.text).toContain("Answering early doesn't give you priority.")
   })
 })

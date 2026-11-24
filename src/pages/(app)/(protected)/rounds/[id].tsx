@@ -13,7 +13,7 @@
  * without a refresh. Every change goes through `callAction`.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth, useQuery, type RecordData } from 'deepspace'
 import { button, DateTab, HeaderBand, listNames, Notice, SeatStrip, Section } from '@/components/slotdraft'
 import type { SeatPreview } from '@/lib/allocator'
@@ -116,10 +116,40 @@ function Collecting({ round, windows, roster, submissions, open }: ViewProps & {
   const [copied, setCopied] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const { title, timezone, deadline } = round.data
+  const [sending, setSending] = useState(false)
+  const [inviteError, setInviteError] = useState('')
+  const location = useLocation()
+  const navigate = useNavigate()
+  const autoSent = useRef(false)
+  const { title, timezone, deadline, sample } = round.data
   const link = `${window.location.origin}/r/${round.recordId}`
   const byStudent = new Map(submissions.map((s) => [s.data.studentId, s]))
   const abbr = tzAbbr(timezone, new Date(deadline))
+  // A row's personal invite link (R19); rows from before invites fall back to the shared link.
+  const inviteLink = (r: Rec<RosterRow>) => (r.data.inviteToken ? `${link}?invite=${r.data.inviteToken}` : link)
+
+  /** Emails everyone not yet sent. Statuses arrive live through the roster query (P9). */
+  async function sendInvites() {
+    setSending(true)
+    setInviteError('')
+    try {
+      await callAction('sendInvites', { roundId: round.recordId })
+    } catch (e) {
+      setInviteError((e as Error).message)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  // "Open round and email students" lands here with state.sendInvites. Clear
+  // the state first, so a refresh doesn't send the batch again.
+  useEffect(() => {
+    if (autoSent.current || !(location.state as { sendInvites?: boolean } | null)?.sendInvites) return
+    autoSent.current = true
+    navigate(location.pathname, { replace: true, state: null })
+    void sendInvites()
+    // Once, on arrival from the create form.
+  }, [])
 
   async function generate() {
     setBusy(true)
@@ -151,6 +181,8 @@ function Collecting({ round, windows, roster, submissions, open }: ViewProps & {
       </HeaderBand>
 
       <div className="mx-auto max-w-6xl space-y-12 px-4 py-10 sm:px-6">
+        {open && !sample && <InviteNotice roster={roster} sending={sending} error={inviteError} onSend={() => void sendInvites()} />}
+
         <Section title="Link for students">
           <div className="flex flex-wrap gap-3">
             <input readOnly aria-label="Link for students" value={link} className="min-h-11 flex-1 rounded-lg border border-input px-3 text-base" />
@@ -163,15 +195,19 @@ function Collecting({ round, windows, roster, submissions, open }: ViewProps & {
               {copied ? 'Copied' : 'Copy link'}
             </button>
           </div>
+          <p className="mt-2 text-muted-foreground">
+            Works when students sign in with the email on your roster. Each student also gets their own link by email.
+          </p>
         </Section>
 
         <Section title="Class roster" aside={<p className="text-muted-foreground">Rankings stay private. You see how many times each student can make.</p>}>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left">
+            <table className="w-full min-w-[720px] text-left">
               <thead className="text-sm text-muted-foreground">
                 <tr className="border-b border-border">
                   <th className="py-2 font-semibold">Student</th>
                   <th className="py-2 font-semibold">Status</th>
+                  {!sample && <th className="py-2 font-semibold">Invite</th>}
                   <th className="py-2 font-semibold">Times they can make</th>
                   <th className="py-2 font-semibold">Last answered</th>
                   <th className="py-2 font-semibold">
@@ -205,10 +241,25 @@ function Collecting({ round, windows, roster, submissions, open }: ViewProps & {
                           <span className="inline-block rounded-full bg-success-tint px-3 py-0.5 font-semibold text-success">Responded</span>
                         )}
                       </td>
+                      {!sample && (
+                        <td className="py-3 pr-3" data-testid="invite-status">
+                          {r.data.inviteStatus === 'sent' ? (
+                            <span className="text-muted-foreground">Sent</span>
+                          ) : r.data.inviteStatus === 'failed' ? (
+                            <span className="font-semibold text-destructive">Didn’t go through</span>
+                          ) : (
+                            <span className="text-muted-foreground">Not sent</span>
+                          )}
+                        </td>
+                      )}
                       <td className="tabular py-3 pr-3">{sub && !noneWork ? `${sub.data.available.length} of ${windows.length}` : ''}</td>
                       <td className="tabular py-3 pr-3 text-muted-foreground">{sub ? formatShortWhen(sub.updatedAt, timezone) : ''}</td>
                       <td className="py-3">
-                        <a className="font-semibold text-primary underline" href={mailto(r.data.email, title)}>
+                        {/* The body carries their personal link, so the TA can send it by hand if the invite didn't arrive. */}
+                        <a
+                          className="font-semibold text-primary underline"
+                          href={`${mailto(r.data.email, title)}&body=${encodeURIComponent(`Pick the times you can make for ${title}: ${inviteLink(r)}`)}`}
+                        >
                           Email<span className="sr-only"> {r.data.name}</span>
                         </a>
                       </td>
@@ -247,6 +298,43 @@ function Note({ text }: { text: string }) {
       )}
     </div>
   )
+}
+
+/**
+ * Where the invite emails stand, from the live roster (P9). One notice at a
+ * time: sending, failed (try again), not sent yet (send), or all sent.
+ */
+function InviteNotice(props: { roster: Rec<RosterRow>[]; sending: boolean; error: string; onSend: () => void }) {
+  const { roster, sending, error, onSend } = props
+  const total = roster.length
+  const sent = roster.filter((r) => r.data.inviteStatus === 'sent').length
+  const failed = roster.filter((r) => r.data.inviteStatus === 'failed').length
+  const unsent = total - sent - failed
+  if (total === 0) return null
+
+  const action = (label: string) => (
+    <button className={`${button.outline} mt-3`} disabled={sending} onClick={onSend}>
+      {label}
+    </button>
+  )
+  if (error) return <Notice tone="error" title={error}>{action('Try again')}</Notice>
+  if (sending) return <Notice tone="attention" title={`Emailing invites… ${sent} of ${total} sent.`} />
+  if (failed) {
+    return (
+      <Notice tone="error" title={`${failed} ${failed === 1 ? 'invite' : 'invites'} didn’t go through.`}>
+        <p>Check the address in the roster, or use Email in their row to send their link yourself.</p>
+        {action('Try again')}
+      </Notice>
+    )
+  }
+  if (unsent) {
+    return (
+      <Notice tone="attention" title={`${unsent} ${unsent === 1 ? 'student hasn’t' : 'students haven’t'} been emailed yet.`}>
+        {action('Email invites')}
+      </Notice>
+    )
+  }
+  return <Notice tone="success" title={total === 1 ? 'Invite emailed to your student.' : `Invites emailed to all ${total} students.`} />
 }
 
 // ---------------------------------------------------------------------------

@@ -35,18 +35,22 @@ test('set up a round in the form, then every student screen before the deadline'
   await ta.page.getByLabel('Window 2 starts').fill('14:00')
   await ta.page.getByLabel('Window 2 ends').fill('15:00')
   await ta.page.getByLabel('Deadline date').fill('2026-12-01')
-  await ta.page.getByLabel('Paste one email per line. A Canvas export works.').fill(`${student.email}\nnobody@example.edu\ndana`)
+  await ta.page.getByLabel('Paste one email per line. A Canvas export works.').fill(`${student.email}\nnobody@deepspace.test\ndana`)
   await expect(ta.page.getByText('Line 3, “dana”, isn’t an email address. Fix it or remove it.')).toBeVisible()
-  await expect(ta.page.getByRole('button', { name: 'Open round for responses' })).toBeDisabled()
+  await expect(ta.page.getByRole('button', { name: 'Open round and email students' })).toBeDisabled()
   await expect(ta.page.getByText('Fix the roster to continue.')).toBeVisible()
   await shot(ta.page, 'ta-02-create-error')
 
-  await ta.page.getByLabel('Paste one email per line. A Canvas export works.').fill(`${student.email}\nnobody@example.edu`)
+  await ta.page.getByLabel('Paste one email per line. A Canvas export works.').fill(`${student.email}\nnobody@deepspace.test`)
   await expect(ta.page.getByText('2 students added')).toBeVisible()
   await expect(ta.page.getByText('2 seats, 2 students')).toBeVisible()
-  await ta.page.getByRole('button', { name: 'Open round for responses' }).click()
+  await ta.page.getByRole('button', { name: 'Open round and email students' }).click()
   await expect(ta.page.getByTestId('responded-count')).toHaveText('0 of 2 responded', { timeout: 15_000 })
   const roundId = ta.page.url().split('/rounds/')[1] ?? ''
+  // Opening the round emails both students; each row turns to Sent without a refresh (P9)
+  await expect(ta.page.getByText('Invites emailed to all 2 students.')).toBeVisible({ timeout: 30_000 })
+  await expect(ta.page.getByTestId('invite-status')).toHaveText(['Sent', 'Sent'])
+  await shot(ta.page, 'ta-03a-invites-sent')
 
   // Screen 7: not on the roster
   await outsider.page.goto(`/r/${roundId}`)
