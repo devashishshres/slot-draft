@@ -2,9 +2,6 @@
 
 **Fair appointment scheduling for TAs.** Students say which times they can make, and SlotDraft fits in as many of them as possible.
 
-- **Live app:** https://slotdraft.app.space
-- **Source:** https://github.com/devashishshres/slot-draft
-
 ---
 
 ## The problem
