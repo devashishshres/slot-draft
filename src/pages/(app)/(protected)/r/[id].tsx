@@ -13,7 +13,7 @@
  * (decision R8). So a draft seat never reaches a student's browser.
  */
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { signOut, useAuth, useQuery, type RecordData } from 'deepspace'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { button, DateTab, Notice, Section } from '@/components/slotdraft'
@@ -47,9 +47,21 @@ export default function StudentRoundPage() {
   const mySubmission = useQuery<Submission>('submissions', { where: { roundId: id, studentId: userId } })
   const myAssignment = useQuery<Assignment>('assignments', { where: { roundId: id, studentId: userId } })
 
-  // Opening the link checks the roster and links this account to its roster row (R9).
+  // Opening the link checks the roster and links this account to its roster row
+  // (R9). A personal invite link carries ?invite=, which works with any account
+  // (R19). Once linked, the token comes off the address bar so it isn't shared
+  // by accident; later visits match on the linked account.
+  const [search, setSearch] = useSearchParams()
+  const invite = search.get('invite') ?? ''
   useEffect(() => {
-    callAction<Join>('joinRound', { roundId: id }).then(setJoin, (e: Error) => setJoinError(e.message))
+    callAction<Join>('joinRound', { roundId: id, ...(invite ? { invite } : {}) }).then(
+      (j) => {
+        setJoin(j)
+        if (invite && j.onRoster) setSearch({}, { replace: true })
+      },
+      (e: Error) => setJoinError(e.message),
+    )
+    // Runs once per round; dropping the token must not re-run the join.
   }, [id])
 
   // Re-check open/closed every 30s, so the form closes at the deadline.
@@ -84,7 +96,9 @@ export default function StudentRoundPage() {
           You signed in as <strong className="break-all">{join.email}</strong>. Ask your TA to add this email to {title}, then open the link
           again.
         </p>
-        <p className="mt-3 text-muted-foreground">If your school uses a different email for you, sign in with that one.</p>
+        <p className="mt-3 text-muted-foreground">
+          If your school uses a different email for you, sign in with that one, or open the invite link from your email.
+        </p>
         <div className="mt-6 space-y-3">
           <button className={`${button.primary} w-full`} onClick={() => signOut()}>
             Sign in with a different email

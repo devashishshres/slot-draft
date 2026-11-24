@@ -54,10 +54,22 @@ export const windowsSchema: CollectionSchema = {
 /**
  * The class list: emails are private, so only the round's organizer reads it.
  * `ownerField` points 'own' at organizerId instead of createdBy.
+ *
+ * inviteToken is the secret in a student's personal invite link (R19). It
+ * lives here because this collection never reaches a student's browser.
+ * Rows from before invites existed read these two columns back as null.
  */
 export const rosterSchema: CollectionSchema = {
   name: 'roster',
-  columns: [text('roundId'), text('name'), text('email'), text('userId'), text('organizerId')],
+  columns: [
+    text('roundId'),
+    text('name'),
+    text('email'),
+    text('userId'),
+    text('organizerId'),
+    text('inviteToken'),
+    text('inviteStatus'),
+  ],
   ownerField: 'organizerId',
   permissions: readOnly('own'),
 }
@@ -135,6 +147,10 @@ export interface RosterRow {
   email: string
   userId: string
   organizerId: string
+  /** Secret for the personal invite link; '' for sample rows (R19). */
+  inviteToken: string
+  /** '' = not emailed yet, then 'sent' or 'failed'. */
+  inviteStatus: '' | 'sent' | 'failed'
 }
 
 export interface Submission {

@@ -161,15 +161,39 @@ async function writeDraft(
   )
 }
 
-/** Finds the caller's roster row by email, and links their user id to it the first time (CLAUDE.md §4). */
-async function rosterRowFor(tools: ActionTools, roundId: string, email: string, userId: string) {
-  if (!email) refuse('We couldn’t read the email on your account. Sign out and sign in again.')
-  const [row] = await getAll<RosterRow>(tools, 'roster', { roundId, email })
+/** A new roster row, with the secret for its personal invite link (R19). */
+function newRosterRow(roundId: string, entry: { name: string; email: string }, organizerId: string): RosterRow {
+  return { roundId, ...entry, userId: '', organizerId, inviteToken: crypto.randomUUID(), inviteStatus: '' }
+}
+
+/**
+ * Finds the caller's roster row, and links their account to it the first time
+ * (CLAUDE.md §4, R19). In order:
+ *   1. a row already linked to this account
+ *   2. the row with the email on their verified sign-in
+ *   3. the row whose invite token they brought (any Google/GitHub account
+ *      works, because DeepSpace has no email sign-up). Never for the
+ *      organizer, so a TA testing a student's link doesn't take that spot.
+ * A row belongs to the first account that links it.
+ */
+async function rosterRowFor(tools: ActionTools, round: Rec<Round>, email: string, userId: string, invite = '') {
+  const rows = await getAll<RosterRow>(tools, 'roster', { roundId: round.recordId })
+  const mine = rows.find((r) => r.data.userId === userId)
+  if (mine) return mine
+
+  const byEmail = email ? rows.find((r) => r.data.email === email) : undefined
+  const byInvite =
+    invite && userId !== round.data.organizerId ? rows.find((r) => r.data.inviteToken === invite) : undefined
+  const row = byEmail ?? byInvite
   if (!row) return null
-  if (row.data.userId && row.data.userId !== userId) {
-    refuse('Another account already answered for this email. Ask your TA to check the roster.')
+  if (row.data.userId) {
+    refuse(
+      byEmail
+        ? 'Another account already answered for this email. Ask your TA to check the roster.'
+        : 'Someone already used this invite link with a different account. Sign in with that account, or ask your TA.',
+    )
   }
-  if (!row.data.userId) await must(tools.update('roster', row.recordId, { userId }))
+  await must(tools.update('roster', row.recordId, { userId }))
   return row
 }
 
@@ -218,30 +242,36 @@ export const actions: Record<string, ActionHandler<Env>> = {
     }
     const roundId = await must(tools.create('rounds', { ...round }))
     await Promise.all(input.windows.map((w) => must(tools.create('windows', { roundId, ...w }))))
-    await Promise.all(
-      roster.valid.map((s) => must(tools.create('roster', { roundId, name: s.name, email: s.email, userId: '', organizerId: userId }))),
-    )
+    await Promise.all(roster.valid.map((s) => must(tools.create('roster', { ...newRosterRow(roundId, s, userId) }))))
     return { roundId }
   }),
 
   /**
-   * Student: opening the link. Says whether the caller is on the roster and
-   * links their account to their roster row (decision R9).
-   * Also returns the TA's email for the "Email your TA" mailto links.
+   * Student: opening the link (optionally a personal invite link). Says
+   * whether the caller is on the roster and links their account to their
+   * roster row (decisions R9, R19). `email` is the roster email when they're
+   * on it, because that's where their result goes. Also returns the TA's
+   * email for the "Email your TA" mailto links.
    */
   joinRound: guarded(async ({ userId, params, tools, callerJwt }) => {
     const round = await getOne<Round>(tools, 'rounds', params.roundId)
     if (!round) refuse('This link doesn’t match a round. Check the link with your TA.')
-    const email = callerEmail(callerJwt)
-    const row = await rosterRowFor(tools, round!.recordId, email, userId)
-    return { onRoster: !!row, email, organizerEmail: await organizerEmail(tools, round!.data.organizerId) }
+    const signedInAs = callerEmail(callerJwt)
+    const invite = typeof params.invite === 'string' ? params.invite : ''
+    if (!signedInAs && !invite) refuse('We couldn’t read the email on your account. Sign out and sign in again.')
+    const row = await rosterRowFor(tools, round!, signedInAs, userId, invite)
+    return {
+      onRoster: !!row,
+      email: row?.data.email ?? signedInAs,
+      organizerEmail: await organizerEmail(tools, round!.data.organizerId),
+    }
   }),
 
   /** Student: save or replace their answer. Rejected once the deadline passes (R3). */
   submitResponse: guarded(async ({ userId, params, tools, callerJwt }) => {
     const round = await getOne<Round>(tools, 'rounds', params.roundId)
     if (!round) refuse('This link doesn’t match a round. Check the link with your TA.')
-    const row = await rosterRowFor(tools, round!.recordId, callerEmail(callerJwt), userId)
+    const row = await rosterRowFor(tools, round!, callerEmail(callerJwt), userId)
     if (!row) refuse('You’re not on the roster for this round. Ask your TA to add your email.')
     if (!isOpen(round!.data, new Date())) {
       refuse(`Responses closed at ${formatClock(round!.data.deadline, round!.data.timezone)}. Your change wasn’t saved.`)
@@ -384,7 +414,8 @@ export const actions: Record<string, ActionHandler<Env>> = {
     }
     for (const s of SAMPLE_STUDENTS) {
       // Fake, pre-linked user ids ("sample-ana"): no real account can have them.
-      await must(tools.create('roster', { roundId, name: s.name, email: s.email, userId: s.id, organizerId: userId }))
+      const row: RosterRow = { roundId, name: s.name, email: s.email, userId: s.id, organizerId: userId, inviteToken: '', inviteStatus: '' }
+      await must(tools.create('roster', { ...row }))
       if (!s.response) continue
       const submission: Submission = {
         roundId,

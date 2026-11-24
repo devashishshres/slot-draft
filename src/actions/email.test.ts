@@ -9,7 +9,9 @@ const round = {
   updatedAt: '',
   createdBy: '',
 }
-const student: RosterRow = { roundId: 'r1', name: 'Ana Lee', email: 'ana@example.edu', userId: 'u1', organizerId: 'ta' }
+const student: RosterRow = {
+  roundId: 'r1', name: 'Ana Lee', email: 'ana@example.edu', userId: 'u1', organizerId: 'ta', inviteToken: 'tok-123', inviteStatus: '',
+}
 const assignment = (patch: Partial<Assignment>): Assignment => ({
   roundId: 'r1', studentId: 'u1', windowId: '', rank: 0, reason: '', published: true,
   readerId: 'u1', organizers: ['ta'], emailStatus: '', groupSize: 0, ...patch,
