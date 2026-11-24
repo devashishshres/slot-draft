@@ -316,7 +316,9 @@ function ResponseForm(props: {
 
       {!noneWork && ranked.length > 1 && (
         <div className="mt-8">
-          <Section title="Which do you prefer?">
+          <Section title="Rank your times">
+            {/* The two ends say which way the ranking runs, without a paragraph (D29). */}
+            <p className="mb-2 text-sm font-semibold text-muted-foreground">Most preferred</p>
             <ol className="space-y-2">
               {ranked.map((id, i) => (
                 <li key={id} className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
@@ -336,6 +338,7 @@ function ResponseForm(props: {
                 </li>
               ))}
             </ol>
+            <p className="mt-2 text-sm font-semibold text-muted-foreground">Least preferred</p>
           </Section>
         </div>
       )}
